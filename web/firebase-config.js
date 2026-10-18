@@ -11,4 +11,11 @@
 //   messagingSenderId: "...",
 //   appId: "..."
 // };
-export const firebaseConfig = null;
+export const firebaseConfig = {
+  apiKey: "AIzaSyCghWig7pq1-9F3YQwyxe25hGV6H9S0Wc0",
+  authDomain: "week-of-meals-5f76e.firebaseapp.com",
+  projectId: "week-of-meals-5f76e",
+  storageBucket: "week-of-meals-5f76e.firebasestorage.app",
+  messagingSenderId: "794793082983",
+  appId: "1:794793082983:web:538e3ec8cbcafc1b9e94c2"
+};
