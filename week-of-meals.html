@@ -1,0 +1,613 @@
+<title>Week of Meals</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-column phone app, three views (Week / Meals / List) behind a fixed bottom tab bar; sheets slide up for picking and editing. */
+:root {
+  --bg: #F2F5F1;
+  --surface: #FFFFFF;
+  --ink: #18261E;
+  --muted: #5E6E64;
+  --line: #DCE3DC;
+  --accent: #2D7148;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E1EEE5;
+  --beet: #A8365A;
+  --beet-soft: #F6E3EA;
+  --shadow: 0 1px 2px rgba(24,38,30,.06), 0 6px 18px rgba(24,38,30,.06);
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --nav-h: 64px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101713; --surface: #18221C; --ink: #E6EEE8; --muted: #94A69A; --line: #2A372F;
+    --accent: #6CC28D; --accent-ink: #0D1A12; --accent-soft: #1F3428; --beet: #EE86A6; --beet-soft: #3A1E29;
+    --shadow: 0 1px 2px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101713; --surface: #18221C; --ink: #E6EEE8; --muted: #94A69A; --line: #2A372F;
+  --accent: #6CC28D; --accent-ink: #0D1A12; --accent-soft: #1F3428; --beet: #EE86A6; --beet-soft: #3A1E29;
+  --shadow: 0 1px 2px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 16px; line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+}
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px calc(var(--nav-h) + 32px + env(safe-area-inset-bottom, 0px));
+}
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+h2 { font-size: 1.15rem; font-weight: 700; }
+.eyebrow { font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.head > div { min-width: 0; }
+.sub { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+.notice { font-size: .85rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: .9rem; white-space: nowrap; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--beet); }
+.btn.armed { background: var(--beet); color: #fff; border-color: var(--beet); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Week */
+.days { display: grid; gap: 10px; }
+.day { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 12px 12px 14px; display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: start; }
+.day.today { outline: 2px solid var(--accent); }
+.dname { font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; line-height: 1.1; }
+.ddate { font-family: var(--f-mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slots { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--ink); border-radius: 999px; padding: 6px 6px 6px 12px; font-weight: 500; font-size: .92rem; max-width: 100%; border: 0; }
+.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .x { width: 24px; height: 24px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; font-size: 1rem; line-height: 1; flex: none; }
+.add-slot { border: 1.5px dashed var(--line); background: transparent; border-radius: 999px; padding: 5px 12px; color: var(--muted); font-size: .9rem; font-weight: 600; }
+.empty-day { color: var(--muted); font-size: .9rem; padding-top: 5px; }
+.week-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.count { font-family: var(--f-mono); font-size: .85rem; color: var(--muted); }
+
+/* Meals */
+.search { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 14px; font: inherit; color: var(--ink); margin-bottom: 12px; }
+.meals { display: grid; gap: 8px; }
+.meal { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; }
+.meal > div { flex: 1; min-width: 0; }
+.meal-name { font-weight: 600; }
+.meal-ing { color: var(--muted); font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--beet); background: var(--beet-soft); border-radius: 6px; padding: 2px 6px; flex: none; }
+.uses { font-family: var(--f-mono); font-size: .8rem; color: var(--accent); flex: none; }
+
+/* List */
+.progress { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 10px 0 18px; }
+.progress i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .25s; }
+.aisle { margin-bottom: 18px; }
+.aisle h3 { font-family: var(--f-body); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px 2px; display: flex; justify-content: space-between; }
+.items { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.item { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center; padding: 11px 14px; border: 0; border-top: 1px solid var(--line); width: 100%; background: transparent; text-align: left; }
+.item:first-child { border-top: 0; }
+.box { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line); display: grid; place-items: center; }
+.item.done .box { background: var(--accent); border-color: var(--accent); }
+.item.done .box::after { content: ""; width: 11px; height: 6px; border-left: 2.5px solid var(--accent-ink); border-bottom: 2.5px solid var(--accent-ink); transform: translateY(-2px) rotate(-45deg); }
+.iname { font-weight: 500; min-width: 0; }
+.isrc { display: block; color: var(--muted); font-size: .8rem; font-weight: 400; }
+.iqty { font-family: var(--f-mono); font-size: .88rem; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.item.done .iname, .item.done .iqty { color: var(--muted); text-decoration: line-through; }
+.extra-form { display: flex; gap: 8px; margin-bottom: 18px; }
+.extra-form input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 14px; font: inherit; color: var(--ink); }
+.del-extra { border: 0; background: transparent; color: var(--muted); font-size: 1.1rem; width: 28px; height: 28px; }
+
+.empty { text-align: center; padding: 36px 12px; color: var(--muted); }
+.empty h2 { color: var(--ink); margin-bottom: 6px; }
+.empty .btn-row { justify-content: center; margin-top: 14px; }
+
+/* Bottom nav */
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+nav.tabs .in { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); height: var(--nav-h); }
+nav.tabs button { border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: .78rem; font-weight: 600; color: var(--muted); }
+nav.tabs button svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+nav.tabs button[aria-selected="true"] { color: var(--accent); }
+.badge { font-family: var(--f-mono); font-size: .7rem; background: var(--beet); color: #fff; border-radius: 99px; padding: 0 6px; margin-left: 4px; }
+
+/* Sheet */
+.scrim { position: fixed; inset: 0; background: rgba(10,18,13,.45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  background: var(--bg); width: 100%; max-width: 560px; max-height: 88%; overflow-y: auto;
+  border-radius: 20px 20px 0 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 10px calc(20px + env(safe-area-inset-bottom, 0px));
+  animation: up .22s ease-out;
+}
+@keyframes up { from { transform: translateY(30px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } .progress i { transition: none; } }
+.grab { width: 40px; height: 5px; border-radius: 9px; background: var(--line); margin: 0 auto 12px; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+label.field { display: grid; gap: 6px; margin-bottom: 14px; font-weight: 600; font-size: .9rem; }
+label.field input, label.field textarea { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 14px; font: inherit; font-weight: 400; color: var(--ink); width: 100%; }
+label.field textarea { min-height: 200px; resize: vertical; font-family: var(--f-mono); font-size: .9rem; line-height: 1.6; }
+.hint { font-weight: 400; color: var(--muted); font-size: .82rem; }
+.pick { width: 100%; }
+.copy-fallback { width: 100%; min-height: 160px; margin-top: 10px; font-family: var(--f-mono); font-size: .85rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 10px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: .9rem; z-index: 30; max-width: calc(100% - 32px); }
+</style>
+
+<main class="wrap" id="app">
+  <div class="empty"><h2>Loading your meals…</h2><p>Your week, meals and list will appear here.</p></div>
+</main>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="in" role="tablist">
+    <button role="tab" id="tab-week" data-act="tab" data-tab="week" aria-selected="true">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Week</button>
+    <button role="tab" id="tab-meals" data-act="tab" data-tab="meals" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5M16 21V3c2.5 1.5 3.5 4 3.5 7.5S18 14 16 14"/></svg>Meals</button>
+    <button role="tab" id="tab-list" data-act="tab" data-tab="list" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M4 5h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h7.6a1.5 1.5 0 0 0 1.5-1.1L20.5 9H7"/><circle cx="10" cy="20" r="1.2"/><circle cx="17" cy="20" r="1.2"/></svg><span>List<span class="badge" id="list-badge" hidden></span></span></button>
+  </div>
+</nav>
+<div id="overlay"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- helpers ----------
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const DAYS = [["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"], ["fri", "Fri"], ["sat", "Sat"], ["sun", "Sun"]];
+  const AISLES = ["Produce", "Meat & Seafood", "Dairy & Fridge", "Bakery", "Pantry", "Frozen", "Other"];
+
+  // ---------- ingredient parsing ----------
+  const UNIT_MAP = {
+    cup: "cup", cups: "cup", c: "cup",
+    tbsp: "tbsp", tablespoon: "tbsp", tablespoons: "tbsp", tbs: "tbsp", tbl: "tbsp",
+    tsp: "tsp", teaspoon: "tsp", teaspoons: "tsp",
+    lb: "lb", lbs: "lb", pound: "lb", pounds: "lb",
+    oz: "oz", ounce: "oz", ounces: "oz",
+    g: "g", gram: "g", grams: "g", kg: "kg",
+    ml: "ml", l: "l", liter: "l", liters: "l",
+    can: "can", cans: "can", jar: "jar", jars: "jar",
+    clove: "clove", cloves: "clove", bunch: "bunch", bunches: "bunch",
+    pkg: "pkg", package: "pkg", packages: "pkg", pack: "pkg", packs: "pkg", bag: "bag", bags: "bag",
+    head: "head", heads: "head", slice: "slice", slices: "slice", box: "box", boxes: "box", bottle: "bottle", bottles: "bottle"
+  };
+  const UNI_FRAC = { "¼": .25, "½": .5, "¾": .75, "⅓": 1 / 3, "⅔": 2 / 3, "⅛": .125 };
+
+  function parseNum(tok) {
+    if (!tok) return null;
+    if (UNI_FRAC[tok] != null) return UNI_FRAC[tok];
+    const m = tok.match(/^(\d+)([¼½¾⅓⅔⅛])$/);
+    if (m) return +m[1] + UNI_FRAC[m[2]];
+    if (/^\d+\/\d+$/.test(tok)) { const [a, b] = tok.split("/").map(Number); return b ? a / b : null; }
+    if (/^\d*\.?\d+$/.test(tok)) return parseFloat(tok);
+    return null;
+  }
+
+  function parseLine(line) {
+    const words = line.trim().replace(/\s+/g, " ").split(" ");
+    let q = null, i = 0;
+    const a = parseNum(words[0]);
+    if (a != null) {
+      q = a; i = 1;
+      const b = parseNum(words[1]);
+      if (b != null && b < 1) { q += b; i = 2; }
+    }
+    let u = "";
+    if (q != null && words[i]) {
+      const w = words[i].toLowerCase().replace(/\.$/, "");
+      if (UNIT_MAP[w]) { u = UNIT_MAP[w]; i++; if ((words[i] || "").toLowerCase() === "of") i++; }
+    }
+    const n = words.slice(i).join(" ").trim();
+    return { q, u, n: n || line.trim() };
+  }
+
+  function lineOf(ing) {
+    return [ing.q != null ? fmtQty(ing.q) : "", ing.u, ing.n].filter(Boolean).join(" ");
+  }
+
+  function fmtQty(x) {
+    const whole = Math.floor(x + 1e-9), frac = x - whole;
+    const fr = [[0, ""], [.25, "¼"], [1 / 3, "⅓"], [.5, "½"], [2 / 3, "⅔"], [.75, "¾"], [1, ""]];
+    for (const [v, s] of fr) {
+      if (Math.abs(frac - v) < .04) {
+        const w = v === 1 ? whole + 1 : whole;
+        return (w ? String(w) : "") + s || "0";
+      }
+    }
+    return String(Math.round(x * 100) / 100);
+  }
+
+  // ---------- aisle guessing ----------
+  const RULES = [
+    ["Frozen", /\bfrozen\b|ice cream/],
+    ["Pantry", /black pepper|pepper flakes|chili powder|garlic powder|onion powder|paprika|cumin|oregano|broth|stock|sauce|salsa|canned|paste|vinegar|\boil\b|olive oil|seasoning|spice|honey|syrup|peanut butter|mustard|ketchup|mayo|beans|lentils|rice|pasta|spaghetti|penne|noodle|flour|sugar|\bsalt\b|oats|cereal|coconut milk|crackers|chips|nuts/],
+    ["Meat & Seafood", /chicken|beef|pork|turkey|sausage|bacon|salmon|shrimp|\bfish\b|cod|tilapia|tuna steak|steak|ground|\bham\b|chorizo|lamb/],
+    ["Dairy & Fridge", /milk|cheese|butter|yogurt|cream|\begg|parmesan|mozzarella|cheddar|feta|tofu|hummus/],
+    ["Bakery", /bread|tortilla|\bbuns?\b|rolls?\b|pita|naan|bagel|baguette|croissant/],
+    ["Produce", /onion|garlic|tomato|lettuce|spinach|pepper|carrot|celery|potato|avocado|lime|lemon|cilantro|basil|parsley|ginger|scallion|cucumber|broccoli|zucchini|squash|mushroom|apple|banana|berr|kale|cabbage|corn|jalape|herb|thyme|rosemary|mint|greens|arugula|cauliflower|asparagus|green beans|peas|fruit|orange|grape|mango/]
+  ];
+  function aisleOf(name) {
+    const s = name.toLowerCase();
+    for (const [a, re] of RULES) if (re.test(s)) return a;
+    return "Pantry";
+  }
+
+  // ---------- state ----------
+  const state = {
+    ready: false, mode: "loading", // "db" | "local"
+    tab: "week",
+    meals: [],            // {id, name, ingredients:[{q,u,n}], example?}
+    plan: {},             // {mon:[mealId,...]}
+    list: { checked: {}, extras: [] },
+    readOnly: false
+  };
+  try { const t = localStorage.getItem("wom-tab"); if (t) state.tab = t; } catch (e) {}
+
+  // ---------- storage backends ----------
+  let backend = null;
+
+  function makeQueue() {
+    let p = Promise.resolve();
+    return (fn) => (p = p.then(fn, fn));
+  }
+
+  function dbBackend(db) {
+    const qPlan = makeQueue(), qList = makeQueue(), qMeal = {};
+    const fail = (e) => {
+      if (e && e.code === "invalid_argument") { state.readOnly = true; toast("You can view this list but not change it."); render(); }
+      else if (e && e.code === "quota_exceeded") toast("Storage is full. Delete a few meals and try again.");
+      else toast("Couldn't save. Check your connection.");
+    };
+    return {
+      start() {
+        db.collection("meals").onSnapshot((snap) => {
+          state.meals = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+          state.ready = true; render();
+        }, () => {});
+        db.doc("plan/week").onSnapshot((d) => { state.plan = d.exists ? (d.data().days || {}) : {}; render(); }, () => {});
+        db.doc("list/state").onSnapshot((d) => {
+          const v = d.exists ? d.data() : {};
+          state.list = { checked: v.checked || {}, extras: v.extras || [] }; render();
+        }, () => {});
+      },
+      saveMeal(m) {
+        const { id, ...body } = m;
+        (qMeal[id] ||= makeQueue())(() => db.doc("meals/" + id).set(body).catch(fail));
+      },
+      deleteMeal(id) { (qMeal[id] ||= makeQueue())(() => db.doc("meals/" + id).delete().catch(fail)); },
+      savePlan() { const days = JSON.parse(JSON.stringify(state.plan)); qPlan(() => db.doc("plan/week").set({ days }).catch(fail)); },
+      saveList() { const v = JSON.parse(JSON.stringify(state.list)); qList(() => db.doc("list/state").set(v).catch(fail)); }
+    };
+  }
+
+  function localBackend() {
+    const KEY = "wom-data";
+    const persist = () => {
+      try { localStorage.setItem(KEY, JSON.stringify({ meals: state.meals, plan: state.plan, list: state.list })); } catch (e) {}
+    };
+    return {
+      start() {
+        try {
+          const v = JSON.parse(localStorage.getItem(KEY) || "null");
+          if (v) { state.meals = v.meals || []; state.plan = v.plan || {}; state.list = v.list || { checked: {}, extras: [] }; }
+        } catch (e) {}
+        state.ready = true; render();
+      },
+      saveMeal(m) { const i = state.meals.findIndex((x) => x.id === m.id); if (i < 0) state.meals.push(m); else state.meals[i] = m; persist(); render(); },
+      deleteMeal(id) { state.meals = state.meals.filter((m) => m.id !== id); persist(); render(); },
+      savePlan() { persist(); },
+      saveList() { persist(); }
+    };
+  }
+
+  // ---------- derived ----------
+  const mealById = (id) => state.meals.find((m) => m.id === id);
+  function sortedMeals() { return state.meals.slice().sort((a, b) => a.name.localeCompare(b.name)); }
+  function plannedCount() { return DAYS.reduce((n, [k]) => n + (state.plan[k] || []).filter(mealById).length, 0); }
+  function usesOf(id) { return DAYS.reduce((n, [k]) => n + (state.plan[k] || []).filter((x) => x === id).length, 0); }
+
+  function buildList() {
+    const map = new Map();
+    for (const [k] of DAYS) for (const id of state.plan[k] || []) {
+      const m = mealById(id); if (!m) continue;
+      for (const ing of m.ingredients || []) {
+        const name = ing.n.trim(); if (!name) continue;
+        const key = name.toLowerCase() + "|" + (ing.u || "");
+        let it = map.get(key);
+        if (!it) { it = { key, name, u: ing.u || "", q: 0, bare: 0, sources: [], aisle: aisleOf(name) }; map.set(key, it); }
+        if (ing.q != null) it.q += ing.q; else it.bare++;
+        if (!it.sources.includes(m.name)) it.sources.push(m.name);
+      }
+    }
+    const items = [...map.values()];
+    for (const x of state.list.extras) items.push({ key: "x:" + x.id, extraId: x.id, name: x.text, u: "", q: 0, bare: 0, sources: ["Added by you"], aisle: aisleOf(x.text) });
+    return items;
+  }
+  function qtyLabel(it) {
+    if (it.q > 0) return fmtQty(it.q) + (it.u ? " " + it.u : "") + (it.bare ? " +" : "");
+    if (it.bare > 1) return "×" + it.bare;
+    return "";
+  }
+
+  // ---------- week dates ----------
+  function weekDates() {
+    const now = new Date(); const day = (now.getDay() + 6) % 7;
+    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+    return DAYS.map((_, i) => new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i));
+  }
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  // ---------- render ----------
+  let armed = null, armTimer = null;
+  function arm(name) { armed = name; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; render(); }, 3500); render(); }
+
+  function render() {
+    const app = $("#app");
+    document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+    const remaining = buildList().filter((it) => !state.list.checked[it.key]).length;
+    const badge = $("#list-badge"); badge.hidden = !remaining; badge.textContent = remaining;
+    if (!state.ready) return;
+    const note = state.mode === "local"
+      ? `<div class="notice">Saved on this device only. Sign in to claude.ai to keep your meals in sync across devices.</div>` : "";
+    const ro = state.readOnly ? `<div class="notice">View only. Ask the owner for Contributor access to make changes.</div>` : "";
+    app.innerHTML = note + ro + (state.tab === "week" ? renderWeek() : state.tab === "meals" ? renderMeals() : renderList());
+  }
+
+  function renderWeek() {
+    const dates = weekDates(), today = new Date().toDateString();
+    const first = dates[0], last = dates[6];
+    const range = `${MONTHS[first.getMonth()]} ${first.getDate()} – ${MONTHS[last.getMonth()]} ${last.getDate()}`;
+    const n = plannedCount();
+    if (!state.meals.length) {
+      return `<div class="head"><div><div class="eyebrow">This week · ${range}</div><h1>Plan your meals</h1></div></div>` + emptyMeals();
+    }
+    const days = DAYS.map(([k, label], i) => {
+      const ids = (state.plan[k] || []).filter(mealById);
+      const chips = ids.map((id, j) => `<span class="chip"><span>${esc(mealById(id).name)}</span><button class="x" data-act="unplan" data-day="${k}" data-idx="${j}" aria-label="Remove ${esc(mealById(id).name)} from ${label}">×</button></span>`).join("");
+      return `<div class="day${dates[i].toDateString() === today ? " today" : ""}">
+        <div><div class="dname">${label}</div><div class="ddate">${MONTHS[dates[i].getMonth()]} ${dates[i].getDate()}</div></div>
+        <div class="slots">${chips}${state.readOnly ? (ids.length ? "" : `<span class="empty-day">Nothing planned</span>`) : `<button class="add-slot" data-act="pick" data-day="${k}">+ ${ids.length ? "Add" : "Add a meal"}</button>`}</div>
+      </div>`;
+    }).join("");
+    return `<div class="head"><div><div class="eyebrow">This week · ${range}</div><h1>Plan your meals</h1></div></div>
+      <div class="days">${days}</div>
+      <div class="week-foot">
+        <span class="count">${n} meal${n === 1 ? "" : "s"} planned</span>
+        <div class="btn-row">
+          ${n && !state.readOnly ? `<button class="btn ${armed === "clearweek" ? "armed" : "danger"}" data-act="clearweek">${armed === "clearweek" ? "Tap again to clear" : "New week"}</button>` : ""}
+          ${n ? `<button class="btn primary" data-act="tab" data-tab="list">See shopping list</button>` : ""}
+        </div>
+      </div>`;
+  }
+
+  function emptyMeals() {
+    return `<div class="empty"><h2>No meals yet</h2><p>Add the meals you like to cook, with their ingredients. Then pick them for each day and your shopping list builds itself.</p>
+      ${state.readOnly ? "" : `<div class="btn-row"><button class="btn primary" data-act="newmeal">Add a meal</button><button class="btn" data-act="starters">Add starter meals</button></div>`}</div>`;
+  }
+
+  let mealQuery = "";
+  function renderMeals() {
+    const head = `<div class="head"><div><div class="eyebrow">${state.meals.length} saved</div><h1>Your meals</h1></div>${state.readOnly ? "" : `<button class="btn primary" data-act="newmeal">+ New</button>`}</div>`;
+    if (!state.meals.length) return head + emptyMeals();
+    const q = mealQuery.toLowerCase();
+    const list = sortedMeals().filter((m) => !q || m.name.toLowerCase().includes(q) || (m.ingredients || []).some((i) => i.n.toLowerCase().includes(q)));
+    const rows = list.map((m) => {
+      const u = usesOf(m.id);
+      return `<button class="meal" data-act="editmeal" data-id="${m.id}"><div><div class="meal-name">${esc(m.name)}</div><div class="meal-ing">${esc((m.ingredients || []).map((i) => i.n).join(", ") || "No ingredients yet")}</div></div>
+        ${m.example ? `<span class="tag">Example</span>` : ""}${u ? `<span class="uses">${u}× this week</span>` : ""}</button>`;
+    }).join("") || `<div class="empty"><p>No meals match “${esc(mealQuery)}”.</p></div>`;
+    return head + `<input class="search" id="meal-search" type="search" placeholder="Search meals or ingredients" value="${esc(mealQuery)}" autocomplete="off"><div class="meals">${rows}</div>`;
+  }
+
+  function renderList() {
+    const items = buildList();
+    const done = items.filter((it) => state.list.checked[it.key]).length;
+    const pct = items.length ? Math.round(done / items.length * 100) : 0;
+    const form = state.readOnly ? "" : `<form class="extra-form" id="extra-form"><input id="extra-input" placeholder="Add something else (paper towels, coffee…)" autocomplete="off" aria-label="Add an item"><button class="btn primary" type="submit">Add</button></form>`;
+    let body;
+    if (!items.length) {
+      body = `<div class="empty"><h2>Your list is empty</h2><p>Pick meals for the week and their ingredients show up here, grouped by aisle.</p><div class="btn-row"><button class="btn primary" data-act="tab" data-tab="week">Plan the week</button></div></div>`;
+    } else {
+      body = AISLES.map((a) => {
+        const group = items.filter((it) => it.aisle === a).sort((x, y) => (!!state.list.checked[x.key] - !!state.list.checked[y.key]) || x.name.localeCompare(y.name));
+        if (!group.length) return "";
+        const left = group.filter((it) => !state.list.checked[it.key]).length;
+        return `<section class="aisle"><h3><span>${a}</span><span>${left ? left + " left" : "done"}</span></h3><div class="items">` + group.map((it) => {
+          const c = !!state.list.checked[it.key];
+          return `<div class="item${c ? " done" : ""}" role="checkbox" aria-checked="${c}" tabindex="0" data-act="toggle" data-key="${esc(it.key)}">
+            <span class="box"></span>
+            <span class="iname">${esc(it.name)}<span class="isrc">${esc(it.sources.join(" · "))}</span></span>
+            ${it.extraId && !state.readOnly ? `<button class="del-extra" data-act="delextra" data-id="${it.extraId}" aria-label="Remove ${esc(it.name)}">×</button>` : `<span class="iqty">${esc(qtyLabel(it))}</span>`}
+          </div>`;
+        }).join("") + `</div></section>`;
+      }).join("");
+    }
+    return `<div class="head"><div><div class="eyebrow">${items.length - done} of ${items.length} to get</div><h1>Shopping list</h1></div>
+        ${items.length ? `<button class="btn" data-act="copy">Copy</button>` : ""}</div>
+      ${items.length ? `<div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>` : ""}
+      ${form}${body}
+      ${done && !state.readOnly ? `<div class="btn-row"><button class="btn" data-act="uncheck">Uncheck all</button></div>` : ""}
+      <div id="copy-slot"></div>`;
+  }
+
+  // ---------- sheets ----------
+  function openSheet(html) {
+    $("#overlay").innerHTML = `<div class="scrim" data-act="close"><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+    const f = $("#overlay [autofocus]"); if (f) f.focus();
+  }
+  function closeSheet() { $("#overlay").innerHTML = ""; }
+
+  function openPicker(day) {
+    const label = DAYS.find((d) => d[0] === day)[1];
+    const rows = sortedMeals().map((m) => `<button class="meal pick" data-act="plan" data-day="${day}" data-id="${m.id}"><div><div class="meal-name">${esc(m.name)}</div><div class="meal-ing">${esc((m.ingredients || []).map((i) => i.n).join(", "))}</div></div>${usesOf(m.id) ? `<span class="uses">${usesOf(m.id)}×</span>` : ""}</button>`).join("");
+    openSheet(`<div class="sheet-head"><h2>Add to ${label}</h2><button class="btn" data-act="close">Done</button></div>
+      <div class="meals">${rows}</div>
+      <div class="btn-row" style="margin-top:12px"><button class="btn" data-act="newmeal" data-day="${day}">+ Create a new meal</button></div>`);
+  }
+
+  function openEditor(meal, forDay) {
+    const isNew = !meal;
+    const text = meal ? (meal.ingredients || []).map(lineOf).join("\n") : "";
+    openSheet(`<form id="meal-form" data-id="${meal ? meal.id : ""}" data-day="${forDay || ""}">
+      <div class="sheet-head"><h2>${isNew ? "New meal" : "Edit meal"}</h2><button class="btn" type="button" data-act="close">Cancel</button></div>
+      <label class="field">Meal name<input id="meal-name" required maxlength="80" value="${esc(meal ? meal.name : "")}" placeholder="Chicken tacos" ${isNew ? "autofocus" : ""}></label>
+      <label class="field">Ingredients <span class="hint">One per line. Start with an amount to have it added up, like “2 lb ground beef” or “1/2 cup rice”.</span>
+        <textarea id="meal-ings" placeholder="1 lb chicken thighs&#10;8 tortillas&#10;1 avocado&#10;cilantro">${esc(text)}</textarea></label>
+      <div class="btn-row" style="justify-content:space-between">
+        ${isNew ? "<span></span>" : `<button type="button" class="btn ${armed === "delmeal" ? "armed" : "danger"}" data-act="delmeal" data-id="${meal.id}">${armed === "delmeal" ? "Tap again to delete" : "Delete meal"}</button>`}
+        <button class="btn primary" type="submit">${isNew ? (forDay ? "Save and add" : "Save meal") : "Save changes"}</button>
+      </div></form>`);
+  }
+
+  // ---------- actions ----------
+  function setTab(t) { state.tab = t; try { localStorage.setItem("wom-tab", t); } catch (e) {} render(); window.scrollTo(0, 0); }
+
+  function toggle(key) {
+    if (state.readOnly) return;
+    const c = Object.assign({}, state.list.checked);
+    if (c[key]) delete c[key]; else c[key] = true;
+    state.list = Object.assign({}, state.list, { checked: c });
+    backend.saveList(); render();
+  }
+
+  function copyList() {
+    const items = buildList().filter((it) => !state.list.checked[it.key]);
+    const text = AISLES.map((a) => {
+      const g = items.filter((it) => it.aisle === a); if (!g.length) return "";
+      return a.toUpperCase() + "\n" + g.map((it) => "- " + it.name + (qtyLabel(it) ? " (" + qtyLabel(it) + ")" : "")).join("\n");
+    }).filter(Boolean).join("\n\n");
+    const fallback = () => {
+      const slot = $("#copy-slot"); if (!slot) return;
+      slot.innerHTML = `<textarea class="copy-fallback" readonly aria-label="Shopping list text"></textarea>`;
+      const ta = slot.firstChild; ta.value = text; ta.focus(); ta.select();
+      toast("Text selected. Copy it from here.");
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => toast("List copied"), fallback);
+    } catch (e) { fallback(); }
+  }
+
+  const STARTERS = [
+    ["Chicken tacos", "1.5 lb chicken thighs\n8 tortillas\n1 avocado\n1 lime\n1 bunch cilantro\n1 cup salsa\n1 cup shredded cheddar"],
+    ["Spaghetti and meat sauce", "1 lb ground beef\n1 lb spaghetti\n1 jar marinara sauce\n1 onion\n3 cloves garlic\n1/2 cup parmesan"],
+    ["Sheet-pan salmon and broccoli", "1.5 lb salmon\n2 heads broccoli\n1 lemon\n2 tbsp olive oil\n2 cloves garlic"],
+    ["Veggie stir-fry", "1 pkg tofu\n2 bell pepper\n1 head broccoli\n2 carrot\n2 cups rice\n3 tbsp soy sauce\n1 tbsp ginger"],
+    ["Turkey chili", "1 lb ground turkey\n2 can kidney beans\n1 can diced tomatoes\n1 onion\n2 tbsp chili powder\n1 cup shredded cheddar"],
+    ["Breakfast for dinner", "12 eggs\n1 lb bacon\n1 loaf bread\n2 tbsp butter\n2 cups berries"]
+  ];
+  function addStarters() {
+    for (const [name, text] of STARTERS) backend.saveMeal({ id: uid(), name, ingredients: text.split("\n").map(parseLine), example: true });
+    toast("Added " + STARTERS.length + " starter meals");
+  }
+
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-act]"); if (!t) return;
+    const act = t.dataset.act;
+    if (act === "close") { if (t.classList.contains("scrim") && e.target !== t) return; closeSheet(); return; }
+    if (act === "tab") return setTab(t.dataset.tab);
+    if (state.readOnly && !["copy", "toggle"].includes(act)) return;
+    switch (act) {
+      case "pick": openPicker(t.dataset.day); break;
+      case "plan": {
+        const d = t.dataset.day; state.plan = Object.assign({}, state.plan, { [d]: (state.plan[d] || []).concat(t.dataset.id) });
+        backend.savePlan(); closeSheet(); render();
+        toast("Added to " + DAYS.find((x) => x[0] === d)[1]); break;
+      }
+      case "unplan": {
+        const d = t.dataset.day, arr = (state.plan[d] || []).filter(mealById); arr.splice(+t.dataset.idx, 1);
+        state.plan = Object.assign({}, state.plan, { [d]: arr }); backend.savePlan(); render(); break;
+      }
+      case "clearweek":
+        if (armed !== "clearweek") return arm("clearweek");
+        armed = null; state.plan = {}; state.list = { checked: {}, extras: [] };
+        backend.savePlan(); backend.saveList(); render(); toast("Week cleared"); break;
+      case "newmeal": openEditor(null, t.dataset.day); break;
+      case "editmeal": armed = null; openEditor(mealById(t.dataset.id)); break;
+      case "delmeal": {
+        const id = t.dataset.id;
+        if (armed !== "delmeal") { armed = "delmeal"; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; }, 3500); t.classList.add("armed"); t.classList.remove("danger"); t.textContent = "Tap again to delete"; return; }
+        armed = null;
+        const plan = {}; for (const [k] of DAYS) plan[k] = (state.plan[k] || []).filter((x) => x !== id);
+        state.plan = plan; backend.savePlan(); backend.deleteMeal(id); closeSheet(); toast("Meal deleted"); break;
+      }
+      case "starters": addStarters(); break;
+      case "toggle": e.preventDefault(); toggle(t.dataset.key); break;
+      case "delextra": state.list = Object.assign({}, state.list, { extras: state.list.extras.filter((x) => x.id !== t.dataset.id) }); backend.saveList(); render(); break;
+      case "uncheck": state.list = Object.assign({}, state.list, { checked: {} }); backend.saveList(); render(); break;
+      case "copy": copyList(); break;
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#overlay").innerHTML) closeSheet();
+    const row = e.target.closest && e.target.closest(".item[data-act=toggle]");
+    if (row && (e.key === " " || e.key === "Enter")) { e.preventDefault(); toggle(row.dataset.key); }
+  });
+
+  document.addEventListener("input", (e) => {
+    if (e.target.id === "meal-search") {
+      mealQuery = e.target.value; const pos = e.target.selectionStart;
+      render(); const s = $("#meal-search"); if (s) { s.focus(); s.setSelectionRange(pos, pos); }
+    }
+  });
+
+  document.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (e.target.id === "extra-form") {
+      const inp = $("#extra-input"); const text = inp.value.trim(); if (!text) return;
+      state.list = Object.assign({}, state.list, { extras: state.list.extras.concat({ id: uid(), text }) });
+      backend.saveList(); render(); const n = $("#extra-input"); if (n) n.focus();
+    }
+    if (e.target.id === "meal-form") {
+      const f = e.target, name = $("#meal-name").value.trim(); if (!name) return;
+      const ingredients = $("#meal-ings").value.split("\n").map((l) => l.trim()).filter(Boolean).map(parseLine);
+      const id = f.dataset.id || uid();
+      backend.saveMeal({ id, name, ingredients });
+      if (!f.dataset.id && f.dataset.day) {
+        const d = f.dataset.day; state.plan = Object.assign({}, state.plan, { [d]: (state.plan[d] || []).concat(id) }); backend.savePlan();
+      }
+      closeSheet(); render(); toast(f.dataset.id ? "Saved" : "Meal added");
+    }
+  });
+
+  let toastTimer;
+  function toast(msg) {
+    let el = $(".toast"); if (!el) { el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = msg; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2200);
+  }
+
+  // ---------- boot ----------
+  async function boot() {
+    let db = null;
+    try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { db = null; }
+    if (db) {
+      state.mode = "db"; backend = dbBackend(db);
+      try {
+        const user = await window.claude.use("user");
+        if (user && typeof user.can === "function") { const can = await user.can("data.write"); if (can === false) state.readOnly = true; }
+      } catch (e) {}
+    } else { state.mode = "local"; backend = localBackend(); }
+    backend.start();
+  }
+  render();
+  boot();
+})();
+</script>

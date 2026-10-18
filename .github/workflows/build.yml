@@ -1,0 +1,92 @@
+# Builds the Android app (APK) and the desktop web app on every push to main,
+# then publishes both to GitHub Pages:
+#   https://<your-username>.github.io/<repo>/                 the desktop app
+#   https://<your-username>.github.io/<repo>/week-of-meals.apk the Android app
+name: Build app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install packages
+        run: npm install --no-audit --no-fund
+
+      - name: Build the web app
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Android only installs an update over the old app when both are signed
+      # with the same key. The first run makes one and saves it in the repo.
+      - name: Set up the signing key
+        run: |
+          if [ ! -f signing/app.keystore ]; then
+            mkdir -p signing
+            keytool -genkeypair -keystore signing/app.keystore -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Week of Meals,O=Personal,C=US"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add signing/app.keystore
+            git commit -m "Add Android signing key [skip ci]"
+            git push
+          fi
+          mkdir -p ~/.android
+          cp signing/app.keystore ~/.android/debug.keystore
+
+      - name: Create the Android project
+        run: npx cap add android
+
+      - name: Make the launcher icon
+        continue-on-error: true
+        run: npx capacitor-assets generate --android --assetPath assets --iconBackgroundColor "#2D7148" --iconBackgroundColorDark "#2D7148"
+
+      - name: Set the version number
+        run: sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.${{ github.run_number }}\"/" android/app/build.gradle
+
+      - name: Copy the web app into Android
+        run: npx cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Add the APK to the site
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk dist/week-of-meals.apk
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

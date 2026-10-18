@@ -1,0 +1,20 @@
+{
+  "name": "week-of-meals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.1.2",
+    "@capacitor/app": "6.0.1",
+    "@capacitor/core": "6.1.2",
+    "firebase": "10.12.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "6.1.2",
+    "esbuild": "0.23.1"
+  }
+}

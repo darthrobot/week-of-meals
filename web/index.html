@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Week of Meals</title>
+<meta name="description" content="Plan the week's meals and get a combined shopping list.">
+<meta name="theme-color" content="#2D7148" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101713" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./styles.css">
+<!--importmap-->
+<!-- Used only when running from source; the build bundles Firebase into app.js and removes this block. -->
+<script type="importmap">
+{ "imports": {
+  "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+  "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+  "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+} }
+</script>
+<!--/importmap-->
+<script type="module" src="./app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <span class="brand">Week of Meals</span>
+    <span class="sync" id="sync" hidden></span>
+    <button class="icon-btn" id="settings-btn" data-act="settings" aria-label="Settings" hidden>
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap" id="app">
+  <div class="empty"><h2>Loading…</h2></div>
+</main>
+
+<nav class="tabs" id="tabs" aria-label="Sections" hidden>
+  <div class="in" role="tablist">
+    <button role="tab" data-act="tab" data-tab="week" aria-selected="true">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Week</button>
+    <button role="tab" data-act="tab" data-tab="meals" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5M16 21V3c2.5 1.5 3.5 4 3.5 7.5S18 14 16 14"/></svg>Meals</button>
+    <button role="tab" data-act="tab" data-tab="discover" aria-selected="false">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg>Discover</button>
+    <button role="tab" data-act="tab" data-tab="list" aria-selected="false">
+      <svg viewBox="0 0 24 24"><path d="M4 5h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h7.6a1.5 1.5 0 0 0 1.5-1.1L20.5 9H7"/><circle cx="10" cy="20" r="1.2"/><circle cx="17" cy="20" r="1.2"/></svg><span>List<span class="badge" id="list-badge" hidden></span></span></button>
+  </div>
+</nav>
+<div id="overlay"></div>
+</body>
+</html>

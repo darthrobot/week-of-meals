@@ -1,0 +1,8 @@
+{
+  "appId": "com.weekofmeals.app",
+  "appName": "Week of Meals",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#F2F5F1"
+  }
+}
