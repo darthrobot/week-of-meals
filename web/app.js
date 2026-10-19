@@ -643,7 +643,9 @@ const AUTH_ERRORS = {
   "auth/user-not-found": "No account uses that email. Create one first.",
   "auth/too-many-requests": "Too many tries. Wait a few minutes and try again.",
   "auth/network-request-failed": "No internet connection. Connect and try again.",
-  "auth/operation-not-allowed": "Email sign-in isn't turned on in your Firebase project yet (Authentication > Sign-in method)."
+  "auth/operation-not-allowed": "Email sign-in isn't turned on in your Firebase project yet (Authentication > Sign-in method).",
+  "auth/configuration-not-found": "Sign-in isn't set up in your Firebase project yet. In the Firebase console, open Authentication, click Get started and turn on Email/Password.",
+  "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "The Firebase config in firebase-config.js doesn't match your project. Copy it again from Project settings."
 };
 
 document.addEventListener("click", (e) => {
@@ -769,7 +771,8 @@ document.addEventListener("submit", async (e) => {
       else if (state.authMode === "signup") { await store.signUp(email, pw); }
       else { await store.signIn(email, pw); }
     } catch (err) {
-      show({ text: AUTH_ERRORS[err && err.code] || "Something went wrong. Try again." });
+      const code = (err && err.code) || "";
+      show({ text: AUTH_ERRORS[code] || `Something went wrong. Try again.${code ? ` (Error: ${code})` : ""}` });
     }
   }
 });
