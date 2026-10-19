@@ -90,6 +90,8 @@ const state = {
   user: null,
   tab: "week",
   meals: [], plan: {}, list: { checked: {}, extras: [] },
+  cooked: {},           // {"mon|mealId": true}
+  fridge: {},           // produce bought: {id: {name, listKey, bought: "YYYY-MM-DD", shelf, meals: [mealId]}}
   authMode: "signin",   // signin | signup | reset
   authMsg: null,
   online: navigator.onLine
@@ -100,11 +102,12 @@ const handlers = {
   onUser(u) {
     state.user = u;
     state.phase = u ? "app" : "signin";
-    if (!u) { state.meals = []; state.plan = {}; state.list = { checked: {}, extras: [] }; }
+    if (!u) { state.meals = []; state.plan = {}; state.cooked = {}; state.list = { checked: {}, extras: [] }; state.fridge = {}; }
     render();
   },
   onMeals(m) { state.meals = m; render(); },
-  onPlan(p) { state.plan = p; render(); },
+  onPlan(p, c) { state.plan = p; state.cooked = c || {}; render(); },
+  onFridge(f) { state.fridge = f || {}; render(); },
   onList(l) { state.list = l; render(); },
   onError(e) {
     console.error(e);
@@ -127,13 +130,14 @@ function buildList() {
       const name = (ing.n || "").trim(); if (!name) continue;
       const key = name.toLowerCase() + "|" + (ing.u || "");
       let it = map.get(key);
-      if (!it) { it = { key, name, u: ing.u || "", q: 0, bare: 0, sources: [], aisle: aisleOf(name, ing.u) }; map.set(key, it); }
+      if (!it) { it = { key, name, u: ing.u || "", q: 0, bare: 0, sources: [], mealIds: [], aisle: aisleOf(name, ing.u) }; map.set(key, it); }
       if (ing.q != null) it.q += ing.q; else it.bare++;
       if (!it.sources.includes(m.name)) it.sources.push(m.name);
+      if (!it.mealIds.includes(m.id)) it.mealIds.push(m.id);
     }
   }
   const items = [...map.values()];
-  for (const x of state.list.extras) items.push({ key: "x:" + x.id, extraId: x.id, name: x.text, u: "", q: 0, bare: 0, sources: ["Added by you"], aisle: aisleOf(x.text) });
+  for (const x of state.list.extras) items.push({ key: "x:" + x.id, extraId: x.id, name: x.text, u: "", q: 0, bare: 0, sources: ["Added by you"], mealIds: [], aisle: aisleOf(x.text) });
   return items;
 }
 const PLURAL = { cup: "cups", can: "cans", jar: "jars", clove: "cloves", bunch: "bunches", bag: "bags", head: "heads", stalk: "stalks", stick: "sticks", slice: "slices", box: "boxes", bottle: "bottles" };
@@ -201,23 +205,30 @@ function emptyMeals() {
 }
 
 function renderWeek() {
-  const dates = weekDates(), today = new Date().toDateString();
+  const dates = weekDates(), todayStr = new Date().toDateString(), ti = todayIdx();
   const range = `${MONTHS[dates[0].getMonth()]} ${dates[0].getDate()} – ${MONTHS[dates[6].getMonth()]} ${dates[6].getDate()}`;
-  const head = `<div class="head"><div><div class="eyebrow">This week · ${range}</div><h1>Plan your meals</h1></div></div>`;
+  const nFridge = Object.keys(state.fridge).length;
+  const head = `<div class="head"><div><div class="eyebrow">This week · ${range}</div><h1>Plan your meals</h1></div>
+    <button class="btn" data-act="fridge">Fridge${nFridge ? " · " + nFridge : ""}</button></div>`;
   if (!state.meals.length) return head + emptyMeals();
   const n = plannedCount();
   const days = DAYS.map(([k, label], i) => {
     const ids = (state.plan[k] || []).filter(mealById);
     const chips = ids.map((id, j) => {
-      const name = esc(mealById(id).name);
-      return `<span class="chip"><span>${name}</span><button class="x" data-act="unplan" data-day="${k}" data-idx="${j}" aria-label="Remove ${name} from ${label}">×</button></span>`;
+      const name = esc(mealById(id).name), done = !!state.cooked[k + "|" + id];
+      const missed = !done && i < ti;
+      return `<span class="chip${done ? " cooked" : ""}${missed ? " missed" : ""}">
+        <button class="ck" data-act="cook" data-day="${k}" data-id="${esc(id)}" aria-pressed="${done}" aria-label="${done ? "Made" : "Mark as made"}: ${name}"></button>
+        <button class="cname" data-act="viewmeal" data-id="${esc(id)}">${name}</button>
+        <button class="x" data-act="unplan" data-day="${k}" data-idx="${j}" aria-label="Remove ${name} from ${label}">×</button></span>`;
     }).join("");
-    return `<div class="day${dates[i].toDateString() === today ? " today" : ""}">
+    return `<div class="day${dates[i].toDateString() === todayStr ? " today" : ""}">
       <div><div class="dname">${label}</div><div class="ddate">${MONTHS[dates[i].getMonth()]} ${dates[i].getDate()}</div></div>
       <div class="slots">${chips}<button class="add-slot" data-act="pick" data-day="${k}">+ ${ids.length ? "Add" : "Add a meal"}</button></div>
     </div>`;
   }).join("");
-  return head + `<div class="days">${days}</div>
+  return head + renderUseItUp() + `<div class="days">${days}</div>
+    <p class="hint-line">Tap the circle on a meal once you've made it.</p>
     <div class="week-foot">
       <span class="count">${n} meal${n === 1 ? "" : "s"} planned</span>
       <div class="btn-row">
@@ -272,6 +283,134 @@ function renderList() {
     ${form}${body}
     ${done ? `<div class="btn-row"><button class="btn" data-act="uncheck">Uncheck all</button></div>` : ""}
     <div id="copy-slot"></div>`;
+}
+
+// ---------- produce tracking ----------
+// Typical fridge life in days, checked in order (so "green onion" wins over "onion").
+const SHELF = [
+  [/spinach|arugula|salad|lettuce|romaine|greens/, 5], [/berr/, 4], [/avocado/, 4], [/asparagus/, 4], [/corn/, 3],
+  [/mushroom/, 5], [/basil/, 4], [/cilantro|parsley|dill|mint|herb|thyme|rosemary/, 7], [/green onion|scallion/, 7],
+  [/tomato/, 6], [/broccoli|cauliflower/, 6], [/green bean/, 6], [/zucchini|squash/, 6], [/cucumber/, 6],
+  [/bell pepper|jalape/, 9], [/coleslaw|cabbage/, 7], [/banana/, 5], [/kale/, 6], [/lemon|lime|orange/, 21],
+  [/ginger/, 21], [/celery/, 14], [/carrot/, 21], [/apple/, 28], [/potato/, 21], [/onion/, 30], [/garlic/, 45]
+];
+const shelfLife = (name) => { const s = name.toLowerCase(); for (const [re, d] of SHELF) if (re.test(s)) return d; return 7; };
+
+const pad = (n) => String(n).padStart(2, "0");
+const isoDate = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const today = () => isoDate(new Date());
+const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const daysSince = (s) => Math.round((parseDate(today()) - parseDate(s)) / 864e5);
+const daysLeft = (item) => item.shelf - daysSince(item.bought);
+const todayIdx = () => (new Date().getDay() + 6) % 7;
+
+// Loose name matching: "baby spinach" matches "spinach", "tomatoes" matches "cherry tomato".
+function normName(s) {
+  return s.toLowerCase().replace(/[^a-z ]/g, " ")
+    .replace(/\b(fresh|baby|large|small|medium|ripe|chopped|finely|sliced|diced|whole|bunch|of)\b/g, " ")
+    .replace(/oes\b/g, "o").replace(/ies\b/g, "y").replace(/s\b/g, "")
+    .replace(/\s+/g, " ").trim();
+}
+function sameFood(a, b) {
+  const x = normName(a), y = normName(b);
+  return !!x && !!y && (x.includes(y) || y.includes(x));
+}
+
+// Where a meal sits in this week's plan, if it isn't cooked yet.
+function planSlot(mealId) {
+  const ti = todayIdx();
+  for (let i = 0; i < DAYS.length; i++) {
+    const k = DAYS[i][0];
+    if ((state.plan[k] || []).includes(mealId) && !state.cooked[k + "|" + mealId]) return { k, i, past: i < ti, inDays: i - ti };
+  }
+  return null;
+}
+const wasCooked = (mealId) => DAYS.some(([k]) => state.cooked[k + "|" + mealId]);
+
+// Why a tracked item needs attention, or null if it's fine for now.
+function riskOf(item) {
+  const left = daysLeft(item);
+  const meals = (item.meals || []).map(mealById).filter(Boolean);
+  if (left < 0) return { level: "bad", text: "May be past its best. Check it before using." };
+  // Long keepers (onions, garlic, potatoes) only need attention once they get close.
+  if (left <= 7) for (const m of meals) {
+    if (wasCooked(m.id)) continue;
+    const slot = planSlot(m.id);
+    if (!slot) return { level: left <= 2 ? "bad" : "warn", text: `Bought for ${m.name}, which isn't planned anymore.` };
+    if (slot.past) return { level: left <= 2 ? "bad" : "warn", text: `Bought for ${m.name} on ${DAYS[slot.i][1]}, which you haven't marked as made.` };
+    if (slot.inDays > left) return { level: "warn", text: `${m.name} is planned for ${DAYS[slot.i][1]}, but it may not last that long.` };
+  }
+  if (left <= 2) return { level: left <= 1 ? "bad" : "warn", text: meals.length ? `Use soon. It's for ${meals.map((m) => m.name).join(" and ")}.` : "Use soon." };
+  return null;
+}
+const leftLabel = (n) => (n < 0 ? "Past" : n === 0 ? "Today" : n === 1 ? "1 day" : n + " days");
+const fridgeItems = () => Object.entries(state.fridge).map(([id, it]) => ({ id, ...it })).sort((a, b) => daysLeft(a) - daysLeft(b));
+
+// Recipes (saved meals first, then the library) that use the most at-risk produce,
+// skipping meals already planned for later this week.
+let lastIdeas = [];
+function useItUpIdeas(atRisk) {
+  const upcoming = new Set(state.meals.filter((m) => { const s = planSlot(m.id); return s && !s.past; }).map((m) => m.id));
+  const savedSources = new Set(state.meals.map((m) => m.source).filter(Boolean));
+  const cands = state.meals.filter((m) => !upcoming.has(m.id)).map((m) => ({ r: m, meal: m }))
+    .concat(BUILT_IN.filter((r) => !savedSources.has(r.source)).map((r) => ({ r, meal: null })));
+  return cands.map((c) => ({ ...c, uses: atRisk.filter((it) => (c.r.ingredients || []).some((i) => sameFood(i.n || "", it.name))) }))
+    .filter((c) => c.uses.length)
+    .sort((a, b) => b.uses.length - a.uses.length || (b.meal ? 1 : 0) - (a.meal ? 1 : 0))
+    .slice(0, 3);
+}
+
+function renderUseItUp() {
+  const atRisk = fridgeItems().map((it) => ({ ...it, risk: riskOf(it) })).filter((it) => it.risk);
+  if (!atRisk.length) return "";
+  lastIdeas = useItUpIdeas(atRisk);
+  const rows = atRisk.slice(0, 5).map((it) => `<li><span class="pill ${it.risk.level}">${leftLabel(daysLeft(it))}</span>
+    <div><b>${esc(it.name)}</b><small>${esc(it.risk.text)}</small></div></li>`).join("");
+  const more = atRisk.length > 5 ? `<li class="more">and ${atRisk.length - 5} more in your fridge</li>` : "";
+  const ideas = lastIdeas.map((c, i) => `<button class="idea" data-act="idea" data-idx="${i}">
+      <span class="rname">${esc(c.r.name)}</span>
+      <span class="rmeta">Uses ${esc(c.uses.map((u) => u.name).join(", "))}${c.meal ? " · in your meals" : ""}</span></button>`).join("");
+  return `<section class="useup" aria-label="Produce to use up">
+    <div class="useup-head"><h2>Use it up</h2><button class="link" data-act="fridge">See fridge</button></div>
+    <ul class="risk">${rows}${more}</ul>
+    ${ideas ? `<div class="sect">Ideas to use them</div><div class="ideas">${ideas}</div>` : ""}
+  </section>`;
+}
+
+function openFridge() {
+  const items = fridgeItems();
+  const rows = items.map((it) => {
+    const r = riskOf(it), left = daysLeft(it);
+    const meals = (it.meals || []).map(mealById).filter(Boolean).map((m) => m.name);
+    const d = parseDate(it.bought);
+    return `<li><span class="pill ${r ? r.level : "ok"}">${leftLabel(left)}</span>
+      <div><b>${esc(it.name)}</b><small>Bought ${DAYS[(d.getDay() + 6) % 7][1]} ${MONTHS[d.getMonth()]} ${d.getDate()}${meals.length ? " · for " + esc(meals.join(", ")) : ""}</small></div>
+      <span class="fbtns"><button class="btn" data-act="fused" data-id="${esc(it.id)}">Used</button><button class="btn danger" data-act="ftoss" data-id="${esc(it.id)}">Tossed</button></span></li>`;
+  }).join("");
+  openSheet(`<div class="sheet-head"><h2>Fridge</h2><button class="btn" data-act="close">Done</button></div>
+    <p class="muted">Produce you tick off on the shopping list shows up here, with about how long it keeps in the fridge.</p>
+    <form class="extra-form" id="fridge-form"><input id="fridge-input" placeholder="Add produce you bought" autocomplete="off" aria-label="Add produce"><button class="btn primary" type="submit">Add</button></form>
+    ${items.length ? `<ul class="risk fridge">${rows}</ul>` : `<div class="empty"><p>Nothing tracked yet.</p></div>`}`);
+}
+
+function removeFridge(id) { const f = Object.assign({}, state.fridge); delete f[id]; setFridge(f); }
+
+// Marking a meal as made clears the produce that was bought only for it.
+function toggleCooked(day, mealId) {
+  const key = day + "|" + mealId, cooked = Object.assign({}, state.cooked);
+  const nowCooked = !cooked[key];
+  if (nowCooked) cooked[key] = true; else delete cooked[key];
+  setPlan(state.plan, cooked);
+  if (!nowCooked) return;
+  const f = {}; let cleared = 0, changed = false;
+  for (const [id, it] of Object.entries(state.fridge)) {
+    if (!(it.meals || []).includes(mealId)) { f[id] = it; continue; }
+    changed = true;
+    const rest = it.meals.filter((m) => m !== mealId);
+    if (rest.length) f[id] = { ...it, meals: rest }; else cleared++;
+  }
+  if (changed) setFridge(f);
+  toast(cleared ? `Nice! ${cleared} produce item${cleared === 1 ? "" : "s"} cleared from your fridge.` : "Marked as made");
 }
 
 // ---------- discover ----------
@@ -450,13 +589,24 @@ function setTab(t) {
   try { localStorage.setItem("wom-tab", t); } catch (e) {}
   render(); window.scrollTo(0, 0);
 }
-function setPlan(plan) { state.plan = plan; store.savePlan(plan); render(); }
+function setPlan(plan, cooked = state.cooked) { state.plan = plan; state.cooked = cooked; store.savePlan(plan, cooked); render(); }
 function setList(list) { state.list = list; store.saveList(list); render(); }
+function setFridge(items) { state.fridge = items; store.saveFridge(items); render(); }
 
 function toggle(key) {
   const checked = Object.assign({}, state.list.checked);
-  if (checked[key]) delete checked[key]; else checked[key] = true;
+  const nowChecked = !checked[key];
+  if (nowChecked) checked[key] = true; else delete checked[key];
   setList(Object.assign({}, state.list, { checked }));
+  // Ticking off produce logs it as bought today; unticking the same day takes it back.
+  const it = buildList().find((x) => x.key === key);
+  if (!it || it.aisle !== "Produce") return;
+  const fridge = Object.assign({}, state.fridge);
+  const existing = Object.keys(fridge).find((id) => fridge[id].listKey === key && fridge[id].bought === today());
+  if (nowChecked && !existing) fridge[uid()] = { name: it.name, listKey: key, bought: today(), shelf: shelfLife(it.name), meals: it.mealIds };
+  else if (!nowChecked && existing) delete fridge[existing];
+  else return;
+  setFridge(fridge);
 }
 
 function copyList() {
@@ -520,10 +670,16 @@ document.addEventListener("click", (e) => {
     case "clearweek":
       if (armed !== "clearweek") { arm("clearweek"); break; }
       armed = null;
-      setPlan({}); setList({ checked: {}, extras: [] }); toast("Week cleared"); break;
+      // Produce in the fridge stays tracked, so leftovers carry into the new week.
+      setPlan({}, {}); setList({ checked: {}, extras: [] }); toast("Week cleared"); break;
     case "newmeal": openEditor(null, t.dataset.day); break;
     case "editmeal": openEditor(mealById(t.dataset.id)); break;
     case "browse": closeSheet(); setTab("discover"); break;
+    case "cook": toggleCooked(t.dataset.day, t.dataset.id); break;
+    case "fridge": openFridge(); break;
+    case "fused": removeFridge(t.dataset.id); openFridge(); toast("Marked as used"); break;
+    case "ftoss": removeFridge(t.dataset.id); openFridge(); toast("Removed from your fridge"); break;
+    case "idea": { const c = lastIdeas[+t.dataset.idx]; if (c) openRecipe(c.r, c.meal); break; }
     case "viewmeal": { const m = mealById(t.dataset.id); if (m) openRecipe(m, m); break; }
     case "filter": discover.filter = t.dataset.filter; render(); break;
     case "clearonline": discover.online = null; render(); break;
@@ -574,6 +730,11 @@ document.addEventListener("input", (e) => {
 document.addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target;
+  if (f.id === "fridge-form") {
+    const name = $("#fridge-input").value.trim(); if (!name) return;
+    setFridge(Object.assign({}, state.fridge, { [uid()]: { name, listKey: "", bought: today(), shelf: shelfLife(name), meals: [] } }));
+    openFridge(); const n = $("#fridge-input"); if (n) n.focus();
+  }
   if (f.id === "discover-form") {
     const q = $("#discover-search").value.trim();
     if (q) searchOnline(q); else $("#discover-search").focus();

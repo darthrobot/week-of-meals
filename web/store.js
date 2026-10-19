@@ -42,8 +42,12 @@ export function cloudStore(h) {
     if (!user) return;
     unsubs.push(onSnapshot(collection(fs, base() + "/meals"),
       (s) => h.onMeals(s.docs.map((d) => ({ id: d.id, ...d.data() }))), fail));
-    unsubs.push(onSnapshot(doc(fs, base() + "/state/plan"),
-      (d) => h.onPlan(d.exists() ? d.data().days || {} : {}), fail));
+    unsubs.push(onSnapshot(doc(fs, base() + "/state/plan"), (d) => {
+      const v = d.exists() ? d.data() : {};
+      h.onPlan(v.days || {}, v.cooked || {});
+    }, fail));
+    unsubs.push(onSnapshot(doc(fs, base() + "/state/fridge"),
+      (d) => h.onFridge(d.exists() ? d.data().items || {} : {}), fail));
     unsubs.push(onSnapshot(doc(fs, base() + "/state/list"), (d) => {
       const v = d.exists() ? d.data() : {};
       h.onList({ checked: v.checked || {}, extras: v.extras || [] });
@@ -60,23 +64,24 @@ export function cloudStore(h) {
     signOut: () => signOut(auth),
     saveMeal(m) { const { id, ...body } = m; setDoc(doc(fs, base() + "/meals/" + id), body).catch(fail); },
     deleteMeal(id) { deleteDoc(doc(fs, base() + "/meals/" + id)).catch(fail); },
-    savePlan(days) { setDoc(doc(fs, base() + "/state/plan"), { days }).catch(fail); },
-    saveList(list) { setDoc(doc(fs, base() + "/state/list"), list).catch(fail); }
+    savePlan(days, cooked) { setDoc(doc(fs, base() + "/state/plan"), { days, cooked }).catch(fail); },
+    saveList(list) { setDoc(doc(fs, base() + "/state/list"), list).catch(fail); },
+    saveFridge(items) { setDoc(doc(fs, base() + "/state/fridge"), { items }).catch(fail); }
   };
 }
 
 export function localStore(h) {
   const KEY = "wom-data";
-  let data = { meals: [], plan: {}, list: { checked: {}, extras: [] } };
+  let data = { meals: [], plan: {}, cooked: {}, list: { checked: {}, extras: [] }, fridge: {} };
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (v) data = { meals: v.meals || [], plan: v.plan || {}, list: v.list || { checked: {}, extras: [] } };
+    if (v) data = { meals: v.meals || [], plan: v.plan || {}, cooked: v.cooked || {}, list: v.list || { checked: {}, extras: [] }, fridge: v.fridge || {} };
   } catch (e) {}
   const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} };
 
   queueMicrotask(() => {
     h.onUser({ email: null, local: true });
-    h.onMeals(data.meals); h.onPlan(data.plan); h.onList(data.list);
+    h.onMeals(data.meals); h.onPlan(data.plan, data.cooked); h.onList(data.list); h.onFridge(data.fridge);
   });
 
   return {
@@ -87,7 +92,8 @@ export function localStore(h) {
       persist(); h.onMeals(data.meals);
     },
     deleteMeal(id) { data.meals = data.meals.filter((m) => m.id !== id); persist(); h.onMeals(data.meals); },
-    savePlan(days) { data.plan = days; persist(); },
-    saveList(list) { data.list = list; persist(); }
+    savePlan(days, cooked) { data.plan = days; data.cooked = cooked; persist(); },
+    saveList(list) { data.list = list; persist(); },
+    saveFridge(items) { data.fridge = items; persist(); }
   };
 }
