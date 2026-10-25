@@ -60,6 +60,12 @@ jobs:
       - name: Create the Android project
         run: npx cap add android
 
+      # Lets the "Take photo" button open the camera.
+      - name: Allow the camera
+        run: |
+          grep -q "android.permission.CAMERA" android/app/src/main/AndroidManifest.xml || \
+            sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
+
       - name: Make the launcher icon
         continue-on-error: true
         run: npx capacitor-assets generate --android --assetPath assets --iconBackgroundColor "#2D7148" --iconBackgroundColorDark "#2D7148"

@@ -247,7 +247,7 @@ function renderMeals() {
     .filter((m) => !q || m.name.toLowerCase().includes(q) || (m.ingredients || []).some((i) => (i.n || "").toLowerCase().includes(q)))
     .map((m) => {
       const u = usesOf(m.id);
-      return `<button class="meal" data-act="viewmeal" data-id="${esc(m.id)}"><div><div class="meal-name">${esc(m.name)}</div><div class="meal-ing">${esc((m.ingredients || []).map((i) => i.n).join(", ") || "No ingredients yet")}</div></div>
+      return `<button class="meal" data-act="viewmeal" data-id="${esc(m.id)}">${m.photo ? `<img class="mthumb" src="${esc(m.photo)}" alt="" loading="lazy">` : ""}<div><div class="meal-name">${esc(m.name)}</div><div class="meal-ing">${esc((m.ingredients || []).map((i) => i.n).join(", ") || "No ingredients yet")}</div></div>
         ${m.example ? `<span class="tag">Example</span>` : ""}${u ? `<span class="uses">${u}× this week</span>` : ""}</button>`;
     }).join("") || `<div class="empty"><p>No meals match “${esc(mealQuery)}”.</p></div>`;
   return head + `<input class="search" id="meal-search" type="search" placeholder="Search meals or ingredients" value="${esc(mealQuery)}" autocomplete="off" aria-label="Search meals"><div class="meals">${rows}</div>`;
@@ -459,7 +459,8 @@ function renderDiscover() {
 
 function recipeCard(r, src, idx) {
   const saved = savedFor(r.source);
-  const img = r.thumb ? `<img src="${esc(r.thumb)}" alt="" loading="lazy">` : `<span class="rinitial" aria-hidden="true">${esc(r.name[0])}</span>`;
+  const pic = (saved && saved.photo) || r.thumb;
+  const img = pic ? `<img src="${esc(pic)}" alt="" loading="lazy">` : `<span class="rinitial" aria-hidden="true">${esc(r.name[0])}</span>`;
   return `<button class="rcard" data-act="recipe" data-src="${src}" data-idx="${idx}">${img}
     <span class="rbody"><span class="rname">${esc(r.name)}</span><span class="rmeta">${esc(metaOf(r))}</span></span>
     ${saved ? `<span class="tag saved">Saved</span>` : ""}</button>`;
@@ -561,22 +562,62 @@ function saveRecipe(r) {
   return meal.id;
 }
 
+// Shrinks a photo to a small JPEG data URL so it fits inside the meal's synced record.
+async function shrinkPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = url; });
+    for (const [size, quality] of [[720, 0.72], [560, 0.6], [420, 0.5]]) {
+      const scale = Math.min(1, size / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const data = c.toDataURL("image/jpeg", quality);
+      if (data.length < 300000) return data;
+    }
+    throw new Error("too-big");
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function setMealPhoto(id, file) {
+  const meal = mealById(id); if (!meal || !file) return;
+  toast("Adding photo…");
+  try {
+    const photo = await shrinkPhoto(file);
+    const updated = { ...meal, photo };
+    store.saveMeal(updated);
+    state.meals = state.meals.map((m) => (m.id === id ? updated : m));
+    render(); openRecipe(updated, updated); toast("Photo added");
+  } catch (e) {
+    toast("Couldn't use that picture. Try a different photo.");
+  }
+}
+
 let sheetRecipe = null; // the recipe or meal shown in the open detail sheet
+const canTakePhoto = isNativeApp || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
+
 function openRecipe(r, meal) {
+  meal = meal || savedFor(r.source) || null; // a saved recipe opens as the user's meal, with their edits
+  if (meal) r = meal;
   sheetRecipe = { r, meal };
-  const saved = meal || savedFor(r.source);
+  const photo = (meal && meal.photo) || r.photo;
   const ings = (r.ingredients || []).map((i) => `<li><span class="iq">${esc([i.q != null ? fmtQty(i.q) : "", i.u].filter(Boolean).join(" "))}</span><span>${esc(i.n)}</span></li>`).join("");
   const steps = (r.steps || []).map((s) => `<li>${esc(s)}</li>`).join("");
   const days = DAYS.map(([k, label]) => `<button class="daybtn" data-act="recipeday" data-day="${k}">${label}</button>`).join("");
-  openSheet(`${r.photo ? `<img class="hero" src="${esc(r.photo)}" alt="">` : ""}
+  const photoBtns = meal ? `
+      ${canTakePhoto ? `<label class="btn">Take photo<input class="photo-input" type="file" accept="image/*" capture="environment" data-id="${esc(meal.id)}" hidden></label>` : ""}
+      <label class="btn">${meal.photo ? "Change photo" : "Choose photo"}<input class="photo-input" type="file" accept="image/*" data-id="${esc(meal.id)}" hidden></label>
+      ${meal.photo ? `<button class="btn danger" data-act="rmphoto" data-id="${esc(meal.id)}">Remove photo</button>` : ""}` : "";
+  openSheet(`${photo ? `<img class="hero" src="${esc(photo)}" alt="">` : ""}
     <div class="sheet-head"><div><h2>${esc(r.name)}</h2><div class="rmeta">${esc(metaOf(r))}</div></div><button class="btn" data-act="close">Close</button></div>
     <div class="eyebrow" style="margin:4px 0 8px">Add to this week</div>
     <div class="days-row">${days}</div>
     <div class="btn-row" style="margin:14px 0 6px">
-      ${meal ? `<button class="btn" data-act="editmeal" data-id="${esc(meal.id)}">Edit</button>`
-        : saved ? `<span class="tag saved big">In your meals</span>` : `<button class="btn primary" data-act="saverecipe">Save to my meals</button>`}
+      ${meal ? `<button class="btn" data-act="editmeal" data-id="${esc(meal.id)}">Edit</button>` : `<button class="btn primary" data-act="saverecipe">Save to my meals</button>`}
+      ${photoBtns}
       ${r.link ? `<a class="btn" href="${esc(r.link)}" target="_blank" rel="noopener">Original recipe</a>` : ""}
     </div>
+    ${meal ? "" : `<p class="hint-line" style="margin-top:0">Save it to add your own photo.</p>`}
     <h3 class="sect">Ingredients</h3><ul class="ings">${ings || `<li>No ingredients listed.</li>`}</ul>
     ${steps ? `<h3 class="sect">Steps</h3><ol class="steps">${steps}</ol>` : ""}`);
 }
@@ -735,6 +776,13 @@ document.addEventListener("click", (e) => {
       else openOnlineRecipe(+t.dataset.idx, t);
       break;
     case "category": browseCategory(t.dataset.cat); break;
+    case "rmphoto": {
+      const m = mealById(t.dataset.id); if (!m) break;
+      const updated = { ...m }; delete updated.photo;
+      store.saveMeal(updated);
+      state.meals = state.meals.map((x) => (x.id === m.id ? updated : x));
+      render(); openRecipe(updated, updated); toast("Photo removed"); break;
+    }
     case "saverecipe":
       if (sheetRecipe) { saveRecipe(sheetRecipe.r); openRecipe(sheetRecipe.r, null); render(); toast("Saved to your meals"); }
       break;
@@ -768,6 +816,10 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && sheetOpen()) closeSheet();
   const row = e.target.closest && e.target.closest(".item[data-act=toggle]");
   if (row && e.target === row && (e.key === " " || e.key === "Enter")) { e.preventDefault(); toggle(row.dataset.key); }
+});
+
+document.addEventListener("change", (e) => {
+  if (e.target.classList && e.target.classList.contains("photo-input")) setMealPhoto(e.target.dataset.id, e.target.files && e.target.files[0]);
 });
 
 document.addEventListener("input", (e) => {
