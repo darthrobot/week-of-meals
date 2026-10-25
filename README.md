@@ -16,9 +16,9 @@ Firebase account, and both keep working offline.
 
 Until Firebase is set up, the app saves only on the device you're using.
 
-**Discover** has a built-in library of 36 weeknight recipes (in
-[`web/recipes.js`](web/recipes.js), which works offline) and an online search
-through [TheMealDB](https://www.themealdb.com). TheMealDB's free key is meant
+**Discover** has a built-in library of 99 weeknight recipes (in
+[`web/recipes.js`](web/recipes.js), which works offline), plus online search
+and category browsing through [TheMealDB](https://www.themealdb.com). TheMealDB's free key is meant
 for personal and development use. If you ever publish the app for other
 people, their site explains how to get a supporter key.
 

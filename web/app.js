@@ -71,11 +71,11 @@ const lineOf = (ing) => [ing.q != null ? fmtQty(ing.q) : "", ing.u, ing.n].filte
 const RULES = [
   ["Frozen", /\bfrozen\b|ice cream/],
   ["Produce", /green beans|coleslaw|salad mix/],
-  ["Pantry", /black pepper|pepper flakes|powder|\bdried\b|sun-dried|paprika|cumin|oregano|broth|stock|sauce|salsa|canned|paste|vinegar|\boil\b|seasoning|spice|honey|syrup|peanut butter|mustard|ketchup|mayo|beans|lentils|rice|pasta|spaghetti|penne|noodle|flour|sugar|\bsalt\b|oats|cereal|coconut milk|crackers|chips|nuts/],
-  ["Meat & Seafood", /chicken|beef|pork|turkey|sausage|bacon|salmon|shrimp|\bfish\b|\bcod\b|tilapia|steak|ground|\bham\b|chorizo|lamb/],
-  ["Dairy & Fridge", /milk|cheese|butter|yogurt|cream|\beggs?\b|parmesan|mozzarella|cheddar|feta|ricotta|tofu|hummus/],
+  ["Pantry", /breadcrumb|black pepper|pepper flakes|powder|\bdried\b|sun-dried|paprika|cumin|oregano|broth|stock|sauce|salsa|canned|paste|vinegar|\boil\b|seasoning|spice|honey|syrup|peanut butter|mustard|ketchup|mayo|beans|lentils|rice|pasta|spaghetti|penne|noodle|flour|sugar|\bsalt\b|oats|cereal|coconut milk|crackers|chips|nuts/],
+  ["Meat & Seafood", /chicken|beef|pork|turkey|sausage|bacon|salmon|shrimp|\bfish\b|\bcod\b|tilapia|steak|ground|\bham\b|chorizo|lamb|chuck|\broast\b/],
+  ["Dairy & Fridge", /milk|cheese|butter|yogurt|cream|\beggs?\b|parmesan|mozzarella|cheddar|feta|ricotta|provolone|refrigerated|tofu|hummus/],
   ["Bakery", /bread|tortilla|\bbuns?\b|\brolls?\b|pita|naan|bagel|baguette|croissant/],
-  ["Produce", /onion|garlic|tomato|lettuce|spinach|pepper|carrot|celery|potato|avocado|lime|lemon|cilantro|basil|parsley|ginger|scallion|cucumber|broccoli|zucchini|squash|mushroom|apple|banana|berr|kale|cabbage|corn|jalape|herb|thyme|rosemary|mint|greens|arugula|cauliflower|asparagus|peas|fruit|orange|grape|mango/]
+  ["Produce", /onion|garlic|tomato|lettuce|spinach|pepper|carrot|celery|potato|avocado|lime|lemon|cilantro|basil|parsley|ginger|scallion|cucumber|broccoli|zucchini|squash|mushroom|apple|banana|berr|kale|cabbage|corn|jalape|herb|thyme|rosemary|mint|greens|arugula|cauliflower|asparagus|peas|fruit|orange|grape|mango|eggplant|brussels|sprout/]
 ];
 function aisleOf(name, unit) {
   const s = name.toLowerCase();
@@ -291,7 +291,8 @@ const SHELF = [
   [/spinach|arugula|salad|lettuce|romaine|greens/, 5], [/berr/, 4], [/avocado/, 4], [/asparagus/, 4], [/corn/, 3],
   [/mushroom/, 5], [/basil/, 4], [/cilantro|parsley|dill|mint|herb|thyme|rosemary/, 7], [/green onion|scallion/, 7],
   [/tomato/, 6], [/broccoli|cauliflower/, 6], [/green bean/, 6], [/zucchini|squash/, 6], [/cucumber/, 6],
-  [/bell pepper|jalape/, 9], [/coleslaw|cabbage/, 7], [/banana/, 5], [/kale/, 6], [/lemon|lime|orange/, 21],
+  [/bell pepper|jalape/, 9], [/coleslaw|cabbage/, 7], [/banana/, 5], [/kale/, 6], [/mango/, 5],
+  [/eggplant/, 6], [/brussels|sprout/, 7], [/lemon|lime|orange/, 21],
   [/ginger/, 21], [/celery/, 14], [/carrot/, 21], [/apple/, 28], [/potato/, 21], [/onion/, 30], [/garlic/, 45]
 ];
 const shelfLife = (name) => { const s = name.toLowerCase(); for (const [re, d] of SHELF) if (re.test(s)) return d; return 7; };
@@ -424,7 +425,9 @@ const FILTERS = [
   ["beef", "Beef"], ["pork", "Pork"], ["seafood", "Seafood"], ["pasta", "Pasta"], ["soup", "Soups"],
   ["one-pan", "One pan"], ["kid-friendly", "Kid-friendly"], ["slow-cooker", "Slow cooker"]
 ];
-const discover = { filter: "all", query: "", online: null }; // online: {q, status: loading|done|error, results}
+// TheMealDB's categories, for browsing online without a search word.
+const ONLINE_CATEGORIES = ["Chicken", "Beef", "Pork", "Seafood", "Vegetarian", "Vegan", "Pasta", "Breakfast", "Lamb", "Side", "Starter", "Dessert", "Miscellaneous"];
+const discover = { filter: "all", query: "", online: null }; // online: {kind: search|category, q, status: loading|done|error, results}
 const savedFor = (source) => state.meals.find((m) => m.source === source);
 const fmtTime = (min) => {
   const h = Math.floor(min / 60), m = min % 60;
@@ -447,6 +450,9 @@ function renderDiscover() {
       <button class="btn primary" type="submit">Search online</button>
     </form>
     <div class="fchips" role="group" aria-label="Filter recipes">${chips}</div>
+    <h3 class="sect">Browse online</h3>
+    <div class="fchips" role="group" aria-label="Browse online recipes by category">${ONLINE_CATEGORIES.map((c) =>
+      `<button class="fchip" data-act="category" data-cat="${c}" aria-pressed="${!!(discover.online && discover.online.kind === "category" && discover.online.q === c)}">${c}</button>`).join("")}</div>
     ${renderOnline()}
     <section><h3 class="sect">Recipe library</h3><div class="rgrid">${cards}</div></section>`;
 }
@@ -462,27 +468,66 @@ function recipeCard(r, src, idx) {
 function renderOnline() {
   const o = discover.online; if (!o) return "";
   let body;
-  if (o.status === "loading") body = `<p class="muted">Searching for “${esc(o.q)}”…</p>`;
+  const isCat = o.kind === "category";
+  if (o.status === "loading") body = `<p class="muted">${isCat ? `Loading ${esc(o.q)} recipes…` : `Searching for “${esc(o.q)}”…`}</p>`;
   else if (o.status === "error") body = `<p class="muted">${!navigator.onLine ? "You're offline. Connect to the internet to search online." : "Couldn't reach the recipe site. Try again in a moment."}</p>`;
   else if (!o.results.length) body = `<p class="muted">No online recipes found for “${esc(o.q)}”. Try one main ingredient, like “chicken” or “salmon”.</p>`;
   else body = `<div class="rgrid">${o.results.map((r, i) => recipeCard(r, "online", i)).join("")}</div>`;
-  return `<section class="online"><h3 class="sect"><span>Online results</span><button class="link" data-act="clearonline">Clear</button></h3>${body}
+  const title = isCat ? `${esc(o.q)} online${o.status === "done" ? ` · ${o.results.length}` : ""}` : "Online results";
+  return `<section class="online"><h3 class="sect"><span>${title}</span><button class="link" data-act="clearonline">Clear</button></h3>${body}
     <p class="credit">Online recipes from TheMealDB.com</p></section>`;
 }
 
-async function searchOnline(q) {
-  q = q.trim(); if (!q) return;
-  discover.online = { q, status: "loading", results: [] }; render();
+const MEALDB = "https://www.themealdb.com/api/json/v1/1/";
+async function mealDb(path) {
+  const res = await fetch(MEALDB + path);
+  if (!res.ok) throw new Error(res.status);
+  return (await res.json()).meals || [];
+}
+
+// Runs one online lookup, ignoring its answer if another lookup started meanwhile.
+async function loadOnline(kind, q, path, map) {
+  const req = { kind, q, status: "loading", results: [] };
+  discover.online = req; render();
   try {
-    const res = await fetch("https://www.themealdb.com/api/json/v1/1/search.php?s=" + encodeURIComponent(q));
-    if (!res.ok) throw new Error(res.status);
-    const json = await res.json();
-    if (!discover.online || discover.online.q !== q) return;
-    discover.online = { q, status: "done", results: (json.meals || []).map(fromMealDb) };
+    const meals = await mealDb(path);
+    if (discover.online !== req) return;
+    discover.online = { ...req, status: "done", results: meals.map(map) };
   } catch (e) {
-    if (discover.online && discover.online.q === q) discover.online = { q, status: "error", results: [] };
+    if (discover.online !== req) return;
+    discover.online = { ...req, status: "error" };
   }
   render();
+}
+
+function searchOnline(q) {
+  q = q.trim(); if (!q) return;
+  loadOnline("search", q, "search.php?s=" + encodeURIComponent(q), fromMealDb);
+}
+
+// Category listings only include name and photo; the full recipe loads when opened.
+function browseCategory(cat) {
+  loadOnline("category", cat, "filter.php?c=" + encodeURIComponent(cat), (m) => ({
+    source: "mealdb:" + m.idMeal, mealdbId: m.idMeal, partial: true, name: m.strMeal, tags: [cat.toLowerCase()],
+    thumb: m.strMealThumb ? m.strMealThumb + "/preview" : "", ingredients: [], steps: []
+  }));
+}
+
+async function openOnlineRecipe(idx, btn) {
+  const o = discover.online, r = o && o.results[idx];
+  if (!r) return;
+  if (!r.partial) return openRecipe(r, null);
+  btn.disabled = true;
+  try {
+    const [m] = await mealDb("lookup.php?i=" + encodeURIComponent(r.mealdbId));
+    if (!m) throw new Error("missing");
+    const full = fromMealDb(m);
+    if (discover.online === o) o.results[idx] = full;
+    openRecipe(full, null);
+  } catch (e) {
+    toast(navigator.onLine ? "Couldn't load that recipe. Try again." : "You're offline. Connect to load this recipe.");
+  }
+  btn.disabled = false;
 }
 
 // Turns a TheMealDB record into the app's recipe shape.
@@ -685,10 +730,11 @@ document.addEventListener("click", (e) => {
     case "viewmeal": { const m = mealById(t.dataset.id); if (m) openRecipe(m, m); break; }
     case "filter": discover.filter = t.dataset.filter; render(); break;
     case "clearonline": discover.online = null; render(); break;
-    case "recipe": {
-      const r = t.dataset.src === "lib" ? BUILT_IN[+t.dataset.idx] : discover.online && discover.online.results[+t.dataset.idx];
-      if (r) openRecipe(r, null); break;
-    }
+    case "recipe":
+      if (t.dataset.src === "lib") openRecipe(BUILT_IN[+t.dataset.idx], null);
+      else openOnlineRecipe(+t.dataset.idx, t);
+      break;
+    case "category": browseCategory(t.dataset.cat); break;
     case "saverecipe":
       if (sheetRecipe) { saveRecipe(sheetRecipe.r); openRecipe(sheetRecipe.r, null); render(); toast("Saved to your meals"); }
       break;
